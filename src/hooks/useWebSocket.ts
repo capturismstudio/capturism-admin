@@ -98,6 +98,7 @@ export function useWebSocket(token: string | null) {
           if (msg.boothId && msg.payload) {
             const { amount = 0, category: rawCategory, cardType = 'eu_debit', cardHash = '', transactionId } = msg.payload;
             const category = rawCategory as ProductCategory | undefined;
+            if (!category) break;
 
             // Record transaction
             const tx: Transaction = {
@@ -124,7 +125,7 @@ export function useWebSocket(token: string | null) {
                   dailyRevenue: b.stats.dailyRevenue + amount,
                   detailed: {
                     ...b.stats.detailed,
-                    ...(category && b.stats.detailed[category] !== undefined
+                    ...(b.stats.detailed[category] !== undefined
                       ? { [category]: b.stats.detailed[category] + amount }
                       : {}),
                   },
