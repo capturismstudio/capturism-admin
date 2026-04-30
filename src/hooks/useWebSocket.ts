@@ -39,7 +39,7 @@ export function useWebSocket(token: string | null) {
   useEffect(() => {
     if (!token) return;
 
-    const relayUrl = import.meta.env.VITE_RELAY_URL || 'ws://localhost:3002';
+    const relayUrl = 'wss://capturism-relay.onrender.com';
 
     function connect() {
       const ws = new WebSocket(`${relayUrl}/ws?type=admin&token=${token}`);

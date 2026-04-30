@@ -17,7 +17,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAuthenticated = !!token;
 
   const login = useCallback(async (password: string) => {
-    const relayUrl = import.meta.env.VITE_RELAY_URL || 'ws://localhost:3002';
+    const relayUrl = 'wss://capturism-relay.onrender.com';
     const httpUrl = relayUrl.replace('ws://', 'http://').replace('wss://', 'https://');
 
     const res = await fetch(`${httpUrl}/api/auth/login`, {
