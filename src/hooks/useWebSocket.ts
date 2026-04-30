@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import type { Booth, RelayMessage, Transaction } from '../types';
+import type { Booth, RelayMessage, Transaction, ProductCategory } from '../types';
 
 const emptyDetailed = {
   photoColor: 0, photoImage: 0, photoCity: 0,
@@ -96,7 +96,8 @@ export function useWebSocket(token: string | null) {
 
         case 'booth:session_complete':
           if (msg.boothId && msg.payload) {
-            const { amount = 0, category, cardType = 'eu_debit', cardHash = '', transactionId } = msg.payload;
+            const { amount = 0, category: rawCategory, cardType = 'eu_debit', cardHash = '', transactionId } = msg.payload;
+            const category = rawCategory as ProductCategory | undefined;
 
             // Record transaction
             const tx: Transaction = {
