@@ -1,5 +1,4 @@
-// TODO: Remove DEV_BYPASS before production deployment
-const DEV_BYPASS = true;
+const DEV_BYPASS = false;
 
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
