@@ -68,6 +68,13 @@ export interface Booth {
 
 export type CardType = 'eu_debit' | 'eu_commercial' | 'non_eu';
 
+export type CompReason = 'admin_bypass' | 'loyalty_reward';
+
+export const compReasonLabels: Record<CompReason, string> = {
+  admin_bypass: 'Admin Bypass',
+  loyalty_reward: 'Loyalty Reward',
+};
+
 export interface Transaction {
   id: string;
   timestamp: string;
@@ -76,6 +83,11 @@ export interface Transaction {
   cardType: CardType;
   cardHash: string; // anonymized card fingerprint for new/returning detection
   boothId: string;
+  // When set, the session was given for free (no money collected).
+  // Convention: `amount` still holds the would-have-paid price, so we can later
+  // report the monetary value of comps (e.g. "€120 given away as loyalty rewards")
+  // without a data migration. Reports exclude these from Gross Sales / Bank Fees.
+  compReason?: CompReason;
 }
 
 // LCL bank commission rates

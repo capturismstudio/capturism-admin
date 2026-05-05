@@ -2,10 +2,10 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWS } from '../contexts/WebSocketContext';
 import Sidebar from '../components/Sidebar';
-import type { ProductCategory, Transaction } from '../types';
+import type { CompReason, ProductCategory, Transaction } from '../types';
 import {
   regionCurrency, currencySymbols,
-  productCategoryLabels, bankCommissionRates, TAX_RATE,
+  productCategoryLabels, bankCommissionRates, compReasonLabels, TAX_RATE,
 } from '../types';
 
 type Period = 'daily' | 'monthly';
@@ -127,26 +127,43 @@ function ReportContent({ booth, symbol, period, setPeriod, transactions, navigat
 
   // Compute report
   const report = useMemo(() => {
-    const grossSales = filtered.reduce((s, tx) => s + tx.amount, 0);
+    const paidTx = filtered.filter(tx => !tx.compReason);
+    const freeTx = filtered.filter(tx => !!tx.compReason);
+
+    const grossSales = paidTx.reduce((s, tx) => s + tx.amount, 0);
     const tax = grossSales * TAX_RATE;
     const netSales = grossSales - tax;
 
     const feesByType = { eu_debit: 0, eu_commercial: 0, non_eu: 0 };
-    filtered.forEach(tx => {
+    paidTx.forEach(tx => {
       const rate = bankCommissionRates[tx.cardType];
       feesByType[tx.cardType] += rate.fixedFee + (tx.amount * rate.rate);
     });
     const totalFees = Object.values(feesByType).reduce((s, f) => s + f, 0);
     const totalCollected = grossSales - totalFees;
 
-    // Sales by category
+    const freeByReason: Record<CompReason, { count: number; value: number }> = {
+      admin_bypass: { count: 0, value: 0 },
+      loyalty_reward: { count: 0, value: 0 },
+    };
+    freeTx.forEach(tx => {
+      if (tx.compReason && freeByReason[tx.compReason]) {
+        freeByReason[tx.compReason].count++;
+        freeByReason[tx.compReason].value += tx.amount;
+      }
+    });
+    const freeCount = freeTx.length;
+    const freeValue = freeTx.reduce((s, tx) => s + tx.amount, 0);
+
+    // Sales by category — count includes free sessions (a session is a session),
+    // but revenue counts paid transactions only so the totals tie out with Gross Sales.
     const byCategory: Record<string, { count: number; revenue: number }> = {};
     const allCatKeys = Object.keys(productCategoryLabels) as ProductCategory[];
     allCatKeys.forEach(k => { byCategory[k] = { count: 0, revenue: 0 }; });
     filtered.forEach(tx => {
       if (byCategory[tx.category]) {
         byCategory[tx.category].count++;
-        byCategory[tx.category].revenue += tx.amount;
+        if (!tx.compReason) byCategory[tx.category].revenue += tx.amount;
       }
     });
 
@@ -190,6 +207,7 @@ function ReportContent({ booth, symbol, period, setPeriod, transactions, navigat
       byHour, byDow,
       totalClients, newClients, returningClients: returningCount,
       feesByType,
+      freeCount, freeValue, freeByReason,
     };
   }, [filtered, transactions, booth.boothId]);
 
@@ -262,6 +280,23 @@ function ReportContent({ booth, symbol, period, setPeriod, transactions, navigat
                 </div>
               </div>
               <SummaryRow label="Total Collected" value={fmt(report.totalCollected, symbol)} bold />
+              <div className="pt-2 mt-2">
+                <SummaryRow
+                  label="Free Purchases"
+                  value={`${report.freeCount} ${report.freeCount === 1 ? 'session' : 'sessions'}`}
+                />
+                <div className="pl-4 space-y-1">
+                  {(Object.keys(compReasonLabels) as CompReason[]).map(reason => {
+                    const r = report.freeByReason[reason];
+                    return (
+                      <div key={reason} className="flex justify-between text-xs text-gray-400">
+                        <span>{compReasonLabels[reason]}</span>
+                        <span className="tabular-nums">{r.count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -289,12 +324,12 @@ function ReportContent({ booth, symbol, period, setPeriod, transactions, navigat
                 const cat = report.byCategory[key];
                 if (!cat) return null;
                 return (
-                  <div key={key} className="flex justify-between text-sm py-1">
-                    <span className="text-gray-500">
-                      {productCategoryLabels[key]}
-                      {cat.count > 0 && <span className="text-gray-300 ml-1">x{cat.count}</span>}
+                  <div key={key} className="flex justify-between items-baseline text-sm py-1">
+                    <span className="text-gray-500">{productCategoryLabels[key]}</span>
+                    <span className="flex items-baseline gap-3">
+                      <span className="text-gray-400 tabular-nums">{cat.count} {cat.count === 1 ? 'session' : 'sessions'}</span>
+                      <span className="font-medium text-gray-700 tabular-nums">{fmt(cat.revenue, symbol)}</span>
                     </span>
-                    <span className="font-medium text-gray-700">{fmt(cat.revenue, symbol)}</span>
                   </div>
                 );
               })}
