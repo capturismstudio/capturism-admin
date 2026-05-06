@@ -22,13 +22,15 @@ const DEFAULT_BOOTHS: Booth[] = [
   },
 ];
 
-export function useWebSocket(token: string | null) {
+export function useWebSocket(token: string | null, onAuthFailed?: () => void) {
   const [connected, setConnected] = useState(false);
   const [booths, setBooths] = useState<Booth[]>(DEFAULT_BOOTHS);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const retriesRef = useRef(0);
+  const authFailedRef = useRef(onAuthFailed);
+  authFailedRef.current = onAuthFailed;
 
   const sendCommand = useCallback((type: string, payload: any) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -38,10 +40,29 @@ export function useWebSocket(token: string | null) {
 
   useEffect(() => {
     if (!token) return;
+    let cancelled = false;
 
     const relayUrl = 'wss://capturism-relay.onrender.com';
+    const httpUrl = relayUrl.replace('wss://', 'https://').replace('ws://', 'http://');
 
-    function connect() {
+    async function connect() {
+      // Validate token via HTTP first — WebSocket close events don't expose
+      // the 401 status, so we can't tell auth failure from a network blip.
+      try {
+        const res = await fetch(`${httpUrl}/api/booths`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (cancelled) return;
+        if (res.status === 401) {
+          console.warn('[WS] Token rejected by relay — forcing re-login');
+          authFailedRef.current?.();
+          return;
+        }
+      } catch {
+        // Network error — fall through and let WS retry handle it
+      }
+      if (cancelled) return;
+
       const ws = new WebSocket(`${relayUrl}/ws?type=admin&token=${token}`);
       wsRef.current = ws;
 
@@ -52,6 +73,7 @@ export function useWebSocket(token: string | null) {
 
       ws.onclose = () => {
         setConnected(false);
+        if (cancelled) return;
         const delay = Math.min(1000 * Math.pow(2, retriesRef.current), 30000);
         retriesRef.current++;
         reconnectTimeoutRef.current = setTimeout(connect, delay);
@@ -152,6 +174,7 @@ export function useWebSocket(token: string | null) {
     connect();
 
     return () => {
+      cancelled = true;
       clearTimeout(reconnectTimeoutRef.current);
       wsRef.current?.close();
     };

@@ -13,8 +13,8 @@ interface WebSocketContextType {
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
-  const { token } = useAuth();
-  const ws = useWebSocket(token);
+  const { token, logout } = useAuth();
+  const ws = useWebSocket(token, logout);
 
   return (
     <WebSocketContext.Provider value={ws}>
