@@ -122,9 +122,13 @@ export function useWebSocket(token: string | null, onAuthFailed?: () => void) {
             const category = rawCategory as ProductCategory | undefined;
             if (!category) break;
 
-            // Record transaction
+            // Record transaction. Guard against duplicates — under React 18
+            // StrictMode the kiosk's PaymentProcessing useEffect can fire twice
+            // in dev, and the relay also re-broadcasts on reconnect. The same
+            // transactionId arriving twice would double-count revenue.
+            const txId = transactionId || `tx_${Date.now()}`;
             const tx: Transaction = {
-              id: transactionId || `tx_${Date.now()}`,
+              id: txId,
               timestamp: msg.timestamp,
               amount,
               category,
@@ -132,7 +136,15 @@ export function useWebSocket(token: string | null, onAuthFailed?: () => void) {
               cardHash,
               boothId: msg.boothId,
             };
-            setTransactions(prev => [...prev, tx]);
+            let isDuplicate = false;
+            setTransactions(prev => {
+              if (prev.some(t => t.id === txId)) {
+                isDuplicate = true;
+                return prev;
+              }
+              return [...prev, tx];
+            });
+            if (isDuplicate) break;
 
             // Update booth stats
             setBooths(prev => prev.map(b => {
