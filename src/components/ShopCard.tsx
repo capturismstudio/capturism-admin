@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Booth, ProductCategory } from '../types';
 import { productCategoryLabels } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ShopCardProps {
   booth: Booth;
@@ -10,9 +11,44 @@ interface ShopCardProps {
 
 const categoryKeys = Object.keys(productCategoryLabels) as ProductCategory[];
 
+const RELAY_HTTP = 'https://capturism-relay.onrender.com';
+
 export default function ShopCard({ booth, symbol }: ShopCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const navigate = useNavigate();
+  const { token } = useAuth();
+
+  const handleExportSubscribers = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (exporting || !token) return;
+    setExporting(true);
+    try {
+      const url = `${RELAY_HTTP}/api/admin/subscriptions.xlsx?boothId=${encodeURIComponent(booth.boothId)}`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Export failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const date = new Date().toISOString().slice(0, 10);
+      const filename = `capturism-subscribers-${booth.boothId}-${date}.xlsx`;
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objUrl);
+    } catch (err) {
+      alert((err as Error).message || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2 }) + ' ' + symbol;
 
@@ -74,6 +110,17 @@ export default function ShopCard({ booth, symbol }: ShopCardProps) {
           ))}
         </div>
       )}
+
+      <button
+        onClick={handleExportSubscribers}
+        disabled={exporting}
+        className="mt-3 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-wait rounded-lg border border-gray-200 transition-colors"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+        </svg>
+        {exporting ? 'Preparing…' : 'Export subscribers (XLSX)'}
+      </button>
 
       <p className="text-xs text-gray-300 mt-3 text-center">Click to view full report</p>
     </div>
