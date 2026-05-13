@@ -116,6 +116,25 @@ export function useWebSocket(token: string | null, onAuthFailed?: () => void) {
           ));
           break;
 
+        case 'relay:transactions_history':
+          // Sent by the relay on admin connect. Seeds the Store Report
+          // page's `transactions` array with everything in R2 so per-booth
+          // breakdowns survive a page refresh / browser restart. We merge
+          // by tx.id so a duplicate event from a later live broadcast
+          // doesn't double-count.
+          if (Array.isArray(msg.payload?.transactions)) {
+            const incoming = msg.payload.transactions as Transaction[];
+            setTransactions(prev => {
+              const known = new Set(prev.map(t => t.id));
+              const merged = [...prev];
+              for (const tx of incoming) {
+                if (!known.has(tx.id)) merged.push(tx);
+              }
+              return merged;
+            });
+          }
+          break;
+
         case 'booth:session_complete':
           if (msg.boothId && msg.payload) {
             const { amount = 0, category: rawCategory, cardType = 'eu_debit', cardHash = '', transactionId } = msg.payload;
